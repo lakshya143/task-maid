@@ -12,9 +12,9 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Restore session from sessionStorage on mount
+    // Restore session from localStorage on mount
     try {
-      const saved = sessionStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(STORAGE_KEY);
       if (saved === "gopal" || saved === "admin") {
         setRole(saved);
       }
@@ -28,12 +28,12 @@ export function AuthProvider({ children }) {
 
     if (password === adminPw) {
       setRole("admin");
-      sessionStorage.setItem(STORAGE_KEY, "admin");
+      localStorage.setItem(STORAGE_KEY, "admin");
       return { success: true, role: "admin" };
     }
     if (password === gopalPw) {
       setRole("gopal");
-      sessionStorage.setItem(STORAGE_KEY, "gopal");
+      localStorage.setItem(STORAGE_KEY, "gopal");
       return { success: true, role: "gopal" };
     }
     return { success: false, role: null };
@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
   function logout() {
     setRole(null);
     try {
-      sessionStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEY);
     } catch (_) {}
   }
 
