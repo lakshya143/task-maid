@@ -113,12 +113,10 @@ const MASTER_TASKS = [
 
 export async function GET() {
   try {
-    // Step 1: Delete everything
+    // Step 1: Delete everything in parallel
     const deleteAll = async (collectionName) => {
       const snap = await getDocs(collection(db, collectionName));
-      for (const d of snap.docs) {
-        await deleteDoc(doc(db, collectionName, d.id));
-      }
+      await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, collectionName, d.id))));
       return snap.size;
     };
 
@@ -127,17 +125,18 @@ export async function GET() {
       deleteAll("taskInstances"),
     ]);
 
-    // Step 2: Re-seed
-    let count = 0;
-    for (const task of MASTER_TASKS) {
-      await addDoc(collection(db, "masterTasks"), {
-        ...task,
-        active: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      count++;
-    }
+    // Step 2: Re-seed in parallel
+    await Promise.all(
+      MASTER_TASKS.map((task) =>
+        addDoc(collection(db, "masterTasks"), {
+          ...task,
+          active: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+      )
+    );
+    const count = MASTER_TASKS.length;
 
     return NextResponse.json({
       success: true,
