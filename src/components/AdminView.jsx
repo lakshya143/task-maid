@@ -430,11 +430,99 @@ function TasksTab() {
   );
 }
 
+// ─── Adhoc Task Modal ─────────────────────────────────────────────────────────
+function AdhocTaskModal({ onClose }) {
+  const [title, setTitle] = useState("");
+  const [time, setTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const todayStr = getTodayString();
+
+  async function handleSave() {
+    if (!title.trim()) return setError("Title is required.");
+    setSaving(true);
+    setError("");
+    try {
+      await addDoc(collection(db, "taskInstances"), {
+        title: title.trim(),
+        time,
+        date: todayStr,
+        status: "pending",
+        adhoc: true,
+        createdAt: serverTimestamp(),
+      });
+      onClose();
+    } catch (e) {
+      setError(e.message || "Failed to create task.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="modal-content w-full sm:max-w-lg bg-white sm:rounded-2xl rounded-t-2xl overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-900">Add Adhoc Task</h2>
+          <button onClick={onClose} className="text-ios-gray hover:text-gray-700 p-1">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-ios-gray uppercase tracking-wider mb-1.5">
+              Task
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSave()}
+              placeholder="e.g. Fix broken shelf"
+              autoFocus
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900
+                         focus:outline-none focus:ring-2 focus:ring-ios-blue/30 focus:border-ios-blue"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ios-gray uppercase tracking-wider mb-1.5">
+              Time
+            </label>
+            <input
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900
+                         focus:outline-none focus:ring-2 focus:ring-ios-blue/30 focus:border-ios-blue"
+            />
+          </div>
+          {error && <p className="text-sm text-ios-red font-medium">{error}</p>}
+        </div>
+        <div className="px-5 py-4 border-t border-gray-100">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full bg-ios-blue text-white font-semibold py-3.5 rounded-xl
+                       disabled:opacity-50 active:scale-[0.98] transition-transform"
+          >
+            {saving ? "Creating…" : "Create Task"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Today Tab ────────────────────────────────────────────────────────────────
 function TodayTab() {
   const [instances, setInstances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
+  const [showAdhocModal, setShowAdhocModal] = useState(false);
   const todayStr = getTodayString();
 
   useEffect(() => {
@@ -456,81 +544,171 @@ function TodayTab() {
     if (!confirm("Delete today's instances and regenerate from master tasks?")) return;
     setRegenerating(true);
 
-    // Delete existing
+    // Delete existing (keep adhoc tasks)
     const snap = await getDocs(
       query(collection(db, "taskInstances"), where("date", "==", todayStr))
     );
-    for (const d of snap.docs) await deleteDoc(d.ref);
+    for (const d of snap.docs) {
+      if (!d.data().adhoc) await deleteDoc(d.ref);
+    }
 
     // Regenerate
     await generateDayInstances();
     setRegenerating(false);
   }
 
+  const active = instances.filter((t) => t.status !== "postponed");
+  const postponed = instances.filter((t) => t.status === "postponed");
   const done = instances.filter((t) => t.status === "done").length;
 
   return (
     <div>
       {/* Header row */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-start justify-between mb-4 gap-3">
         <div>
           <p className="text-sm font-semibold text-gray-900">
             {formatDisplayDate(todayStr)}
           </p>
           <p className="text-xs text-ios-gray mt-0.5">
             {done}/{instances.length} tasks completed
+            {postponed.length > 0 && (
+              <span className="ml-1.5 text-amber-500 font-semibold">
+                · {postponed.length} postponed
+              </span>
+            )}
           </p>
         </div>
-        <button
-          onClick={handleRegenerate}
-          disabled={regenerating}
-          className="text-xs text-ios-blue font-semibold px-3 py-1.5 rounded-xl
-                     border border-ios-blue/30 hover:bg-blue-50 transition-colors disabled:opacity-50"
-        >
-          {regenerating ? "Regenerating…" : "↻ Regenerate"}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="text-xs text-ios-blue font-semibold px-3 py-1.5 rounded-xl
+                       border border-ios-blue/30 hover:bg-blue-50 transition-colors disabled:opacity-50"
+          >
+            {regenerating ? "Regenerating…" : "↻ Regenerate"}
+          </button>
+          <button
+            onClick={() => setShowAdhocModal(true)}
+            className="flex items-center gap-1.5 bg-ios-blue text-white px-4 py-2 rounded-xl
+                       text-sm font-semibold active:scale-[0.97] transition-transform shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Adhoc Task
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="w-6 h-6 border-4 border-ios-blue border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : instances.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-400 font-medium">No instances today</p>
-          <p className="text-sm text-ios-gray mt-1">Regenerate to create today's tasks</p>
-        </div>
       ) : (
-        <div className="space-y-2">
-          {instances.map((t) => (
-            <div key={t.id}
-              className={`bg-white rounded-2xl px-4 py-3.5 shadow-sm flex items-center gap-3
-                          ${t.status === "done" ? "opacity-60" : ""}`}
-            >
-              <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center border-2
-                               ${t.status === "done" ? "bg-ios-green border-ios-green" : "border-gray-300"}`}>
-                {t.status === "done" && (
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </div>
-              <div className="flex-1">
-                <p className={`text-sm font-semibold text-gray-900 ${t.status === "done" ? "line-through" : ""}`}>
-                  {t.title}
-                </p>
-                <p className="text-xs text-ios-gray">{formatTime(t.time)}</p>
-              </div>
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
-                               ${t.status === "done"
-                                 ? "bg-green-100 text-green-700"
-                                 : "bg-gray-100 text-gray-500"
-                               }`}>
-                {t.status === "done" ? "Done" : "Pending"}
-              </span>
+        <>
+          {/* Active tasks */}
+          {active.length === 0 && postponed.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-400 font-medium">No instances today</p>
+              <p className="text-sm text-ios-gray mt-1">Regenerate to create today&apos;s tasks</p>
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="space-y-2">
+              {active.map((t) => (
+                <div
+                  key={t.id}
+                  className={`bg-white rounded-2xl px-4 py-3.5 shadow-sm flex items-center gap-3
+                              ${t.status === "done" ? "opacity-60" : ""}`}
+                >
+                  <div
+                    className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center border-2
+                                 ${t.status === "done" ? "bg-ios-green border-ios-green" : "border-gray-300"}`}
+                  >
+                    {t.status === "done" && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className={`text-sm font-semibold text-gray-900 ${t.status === "done" ? "line-through" : ""}`}>
+                        {t.title}
+                      </p>
+                      {t.adhoc && (
+                        <span className="text-xs bg-violet-100 text-violet-600 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                          adhoc
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-ios-gray">{formatTime(t.time)}</p>
+                  </div>
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0
+                                 ${t.status === "done"
+                                   ? "bg-green-100 text-green-700"
+                                   : "bg-gray-100 text-gray-500"
+                                 }`}
+                  >
+                    {t.status === "done" ? "Done" : "Pending"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Postponed section */}
+          {postponed.length > 0 && (
+            <div className="mt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm font-semibold text-amber-600">⏸ Postponed</span>
+                <div className="flex-1 h-px bg-amber-200" />
+                <span className="text-xs text-amber-500 font-semibold">{postponed.length}</span>
+              </div>
+              <div className="space-y-3">
+                {postponed.map((t) => (
+                  <div
+                    key={t.id}
+                    className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5 shadow-sm"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center
+                                     bg-amber-200 border-2 border-amber-300 mt-0.5"
+                      >
+                        <svg className="w-3 h-3 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{t.title}</p>
+                        <p className="text-xs text-ios-gray">{formatTime(t.time)}</p>
+                        {t.postponeAudioBase64 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-amber-600 font-semibold mb-1">🎤 Gopal&apos;s voice note:</p>
+                            <audio
+                              controls
+                              src={t.postponeAudioBase64}
+                              className="w-full"
+                              style={{ height: "36px" }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">
+                        Postponed
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {showAdhocModal && (
+        <AdhocTaskModal onClose={() => setShowAdhocModal(false)} />
       )}
     </div>
   );
@@ -673,13 +851,13 @@ function StatCard({ label, value, color }) {
 
 // ─── Main Admin View ──────────────────────────────────────────────────────────
 export default function AdminView() {
-  const [tab, setTab] = useState("tasks");
+  const [tab, setTab] = useState("today");
   const { logout } = useAuth();
   const router = useRouter();
 
   const tabs = [
-    { id: "tasks", label: "Tasks", icon: "☑" },
     { id: "today", label: "Today", icon: "📅" },
+    { id: "tasks", label: "Tasks", icon: "☑" },
     { id: "analytics", label: "Analytics", icon: "📊" },
   ];
 
