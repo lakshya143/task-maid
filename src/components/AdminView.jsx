@@ -526,6 +526,7 @@ function TodayTab() {
   const [showAdhocModal, setShowAdhocModal] = useState(false);
   const [isAbsent, setIsAbsent] = useState(false);
   const [absenceWorking, setAbsenceWorking] = useState(false);
+  const [completionInfo, setCompletionInfo] = useState(null); // { allCompletedAt, intendedEndTime }
   const todayStr = getTodayString();
 
   // Real-time listener for today's task instances
@@ -544,10 +545,19 @@ function TodayTab() {
     return unsub;
   }, [todayStr]);
 
-  // Real-time listener for absence status
+  // Real-time listener for absence status + completion info
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "dayStatus", todayStr), (snap) => {
-      setIsAbsent(snap.exists() && snap.data()?.absent === true);
+      const data = snap.data() || {};
+      setIsAbsent(snap.exists() && data.absent === true);
+      if (data.allCompletedAt) {
+        setCompletionInfo({
+          allCompletedAt: data.allCompletedAt,
+          intendedEndTime: data.intendedEndTime || null,
+        });
+      } else {
+        setCompletionInfo(null);
+      }
     });
     return unsub;
   }, [todayStr]);
@@ -624,6 +634,18 @@ function TodayTab() {
               </span>
             )}
           </p>
+          {completionInfo && (
+            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">
+                ✓ Done at {formatTime(toHHMM(completionInfo.allCompletedAt))}
+              </span>
+              {completionInfo.intendedEndTime && (
+                <span className="text-xs bg-gray-100 text-gray-500 font-medium px-2 py-0.5 rounded-full">
+                  Intended {formatTime(completionInfo.intendedEndTime)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {isAbsent ? (
@@ -979,6 +1001,12 @@ export default function AdminView() {
       </div>
     </div>
   );
+}
+
+// Converts a Firestore Timestamp (or Date) to "HH:MM" for formatTime
+function toHHMM(ts) {
+  const d = ts?.toDate ? ts.toDate() : new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 // Ordinal helper (1 → "1st", 2 → "2nd", etc.)

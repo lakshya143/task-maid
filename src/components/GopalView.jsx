@@ -8,6 +8,7 @@ import {
   onSnapshot,
   doc,
   getDoc,
+  setDoc,
   updateDoc,
   deleteField,
   serverTimestamp,
@@ -359,6 +360,7 @@ export default function GopalView() {
   const [generating, setGenerating] = useState(false);
   const [postponeTask, setPostponeTask] = useState(null);
   const [isAbsent, setIsAbsent] = useState(false);
+  const wasAllDoneRef = useRef(false);
   const todayStr = getTodayString();
 
   // Generate today's instances (skip if absent)
@@ -388,6 +390,27 @@ export default function GopalView() {
     });
     return unsub;
   }, [todayStr]);
+
+  // Record completion time when all active tasks are done
+  useEffect(() => {
+    if (activeTasks.length === 0) return;
+    const nowAllDone = activeTasks.every((t) => t.status === "done");
+
+    if (nowAllDone && !wasAllDoneRef.current) {
+      // Find the latest scheduled time across ALL today's tasks (intended end)
+      const latestTime = tasks.reduce((latest, t) => {
+        return compareTime(t.time || "00:00", latest) > 0 ? (t.time || "00:00") : latest;
+      }, "00:00");
+
+      setDoc(
+        doc(db, "dayStatus", todayStr),
+        { allCompletedAt: serverTimestamp(), intendedEndTime: latestTime },
+        { merge: true }
+      );
+    }
+
+    wasAllDoneRef.current = nowAllDone;
+  }, [activeTasks, tasks, todayStr]);
 
   // Real-time listener for today's task instances
   useEffect(() => {
