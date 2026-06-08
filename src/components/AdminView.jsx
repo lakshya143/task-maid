@@ -730,7 +730,14 @@ function TodayTab() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-ios-gray">{formatTime(t.time)}</p>
+                    <p className="text-xs text-ios-gray">
+                      {formatTime(t.time)}
+                      {t.status === "done" && t.completedAt && (
+                        <span className="ml-1.5 text-ios-green font-semibold">
+                          · done {formatTime(toHHMM(t.completedAt))}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <span
                     className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0

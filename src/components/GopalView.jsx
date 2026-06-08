@@ -24,7 +24,16 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmtTimestamp(ts) {
+  if (!ts) return null;
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const period = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${m} ${period}`;
+}
+
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -250,12 +259,19 @@ function TaskItem({ task, onPostpone }) {
           )}
         </div>
 
-        <p
-          className={`task-title text-base font-medium text-gray-900 leading-snug
-                       ${isDone ? "line-through opacity-40" : ""}`}
-        >
-          {task.title}
-        </p>
+        <div className="flex-1 text-left">
+          <p
+            className={`task-title text-base font-medium text-gray-900 leading-snug
+                         ${isDone ? "line-through opacity-40" : ""}`}
+          >
+            {task.title}
+          </p>
+          {isDone && task.completedAt && (
+            <p className="text-xs text-ios-green font-medium mt-0.5">
+              ✓ {fmtTimestamp(task.completedAt)}
+            </p>
+          )}
+        </div>
       </button>
 
       {/* Right action */}
