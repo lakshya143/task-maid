@@ -626,9 +626,28 @@ function TodayTab() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {isAbsent ? (
+            <button
+              onClick={handleMarkPresent}
+              disabled={absenceWorking}
+              className="text-xs font-semibold text-white bg-ios-red px-3 py-1.5 rounded-xl
+                         hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {absenceWorking ? "…" : "🔴 Mark Present"}
+            </button>
+          ) : (
+            <button
+              onClick={handleMarkAbsent}
+              disabled={absenceWorking}
+              className="text-xs font-semibold text-ios-red border border-red-200 px-3 py-1.5 rounded-xl
+                         hover:bg-red-50 transition-colors disabled:opacity-50"
+            >
+              {absenceWorking ? "…" : "Mark Absent"}
+            </button>
+          )}
           <button
             onClick={handleRegenerate}
-            disabled={regenerating}
+            disabled={regenerating || isAbsent}
             className="text-xs text-ios-blue font-semibold px-3 py-1.5 rounded-xl
                        border border-ios-blue/30 hover:bg-blue-50 transition-colors disabled:opacity-50"
           >
@@ -636,8 +655,9 @@ function TodayTab() {
           </button>
           <button
             onClick={() => setShowAdhocModal(true)}
+            disabled={isAbsent}
             className="flex items-center gap-1.5 bg-ios-blue text-white px-4 py-2 rounded-xl
-                       text-sm font-semibold active:scale-[0.97] transition-transform shadow-sm"
+                       text-sm font-semibold active:scale-[0.97] transition-transform shadow-sm disabled:opacity-50"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -646,38 +666,6 @@ function TodayTab() {
           </button>
         </div>
       </div>
-
-      {/* Absence banner */}
-      {isAbsent ? (
-        <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-2xl px-4 py-3 mb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">🔴</span>
-            <div>
-              <p className="text-sm font-semibold text-red-700">Gopal is absent today</p>
-              <p className="text-xs text-red-400">No tasks are shown on his app</p>
-            </div>
-          </div>
-          <button
-            onClick={handleMarkPresent}
-            disabled={absenceWorking}
-            className="text-xs font-semibold text-red-600 border border-red-300 px-3 py-1.5 rounded-xl
-                       hover:bg-red-100 transition-colors disabled:opacity-50"
-          >
-            {absenceWorking ? "…" : "Mark Present"}
-          </button>
-        </div>
-      ) : (
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={handleMarkAbsent}
-            disabled={absenceWorking}
-            className="text-xs font-semibold text-ios-red border border-red-200 px-3 py-1.5 rounded-xl
-                       hover:bg-red-50 transition-colors disabled:opacity-50"
-          >
-            {absenceWorking ? "…" : "Mark Absent"}
-          </button>
-        </div>
-      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
