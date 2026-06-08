@@ -10,6 +10,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  setDoc,
   orderBy,
   serverTimestamp,
   getDocs,
@@ -523,8 +524,11 @@ function TodayTab() {
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [showAdhocModal, setShowAdhocModal] = useState(false);
+  const [isAbsent, setIsAbsent] = useState(false);
+  const [absenceWorking, setAbsenceWorking] = useState(false);
   const todayStr = getTodayString();
 
+  // Real-time listener for today's task instances
   useEffect(() => {
     const q = query(
       collection(db, "taskInstances"),
@@ -539,6 +543,49 @@ function TodayTab() {
     });
     return unsub;
   }, [todayStr]);
+
+  // Real-time listener for absence status
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "dayStatus", todayStr), (snap) => {
+      setIsAbsent(snap.exists() && snap.data()?.absent === true);
+    });
+    return unsub;
+  }, [todayStr]);
+
+  async function handleMarkAbsent() {
+    if (!confirm("Mark Gopal as absent today? All today's tasks will be cleared from his app.")) return;
+    setAbsenceWorking(true);
+    try {
+      // Write absence flag
+      await setDoc(doc(db, "dayStatus", todayStr), {
+        absent: true,
+        markedAt: serverTimestamp(),
+        date: todayStr,
+      });
+      // Delete all today's task instances
+      const snap = await getDocs(
+        query(collection(db, "taskInstances"), where("date", "==", todayStr))
+      );
+      await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+    } finally {
+      setAbsenceWorking(false);
+    }
+  }
+
+  async function handleMarkPresent() {
+    setAbsenceWorking(true);
+    try {
+      // Clear absence flag
+      await setDoc(doc(db, "dayStatus", todayStr), {
+        absent: false,
+        date: todayStr,
+      });
+      // Regenerate today's instances
+      await generateDayInstances();
+    } finally {
+      setAbsenceWorking(false);
+    }
+  }
 
   async function handleRegenerate() {
     if (!confirm("Delete today's instances and regenerate from master tasks?")) return;
@@ -600,6 +647,38 @@ function TodayTab() {
         </div>
       </div>
 
+      {/* Absence banner */}
+      {isAbsent ? (
+        <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-2xl px-4 py-3 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🔴</span>
+            <div>
+              <p className="text-sm font-semibold text-red-700">Gopal is absent today</p>
+              <p className="text-xs text-red-400">No tasks are shown on his app</p>
+            </div>
+          </div>
+          <button
+            onClick={handleMarkPresent}
+            disabled={absenceWorking}
+            className="text-xs font-semibold text-red-600 border border-red-300 px-3 py-1.5 rounded-xl
+                       hover:bg-red-100 transition-colors disabled:opacity-50"
+          >
+            {absenceWorking ? "…" : "Mark Present"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={handleMarkAbsent}
+            disabled={absenceWorking}
+            className="text-xs font-semibold text-ios-red border border-red-200 px-3 py-1.5 rounded-xl
+                       hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {absenceWorking ? "…" : "Mark Absent"}
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="w-6 h-6 border-4 border-ios-blue border-t-transparent rounded-full animate-spin" />
@@ -610,7 +689,7 @@ function TodayTab() {
           {active.length === 0 && postponed.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-gray-400 font-medium">No instances today</p>
-              <p className="text-sm text-ios-gray mt-1">Regenerate to create today&apos;s tasks</p>
+              <p className="text-sm text-ios-gray mt-1">{isAbsent ? "Gopal is marked absent" : "Regenerate to create today's tasks"}</p>
             </div>
           ) : (
             <div className="space-y-2">

@@ -7,6 +7,7 @@ import {
   where,
   onSnapshot,
   doc,
+  getDoc,
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -315,13 +316,20 @@ export default function GopalView() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [postponeTask, setPostponeTask] = useState(null);
+  const [isAbsent, setIsAbsent] = useState(false);
   const todayStr = getTodayString();
 
-  // Generate today's instances (idempotent)
+  // Generate today's instances (skip if absent)
   useEffect(() => {
     async function init() {
       setGenerating(true);
       try {
+        const statusSnap = await getDoc(doc(db, "dayStatus", todayStr));
+        if (statusSnap.exists() && statusSnap.data()?.absent === true) {
+          setIsAbsent(true);
+          setGenerating(false);
+          return;
+        }
         await generateDayInstances();
       } catch (err) {
         console.error("Schedule generation error:", err);
@@ -329,7 +337,15 @@ export default function GopalView() {
       setGenerating(false);
     }
     init();
-  }, []);
+  }, [todayStr]);
+
+  // Real-time listener for absence status (admin can mark absent while app is open)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "dayStatus", todayStr), (snap) => {
+      setIsAbsent(snap.exists() && snap.data()?.absent === true);
+    });
+    return unsub;
+  }, [todayStr]);
 
   // Real-time listener for today's task instances
   useEffect(() => {
@@ -435,7 +451,15 @@ export default function GopalView() {
 
       {/* Task Timeline */}
       <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-5 safe-bottom">
-        {tasks.length === 0 ? (
+        {isAbsent ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+              <span className="text-4xl">🏖️</span>
+            </div>
+            <p className="text-gray-700 font-bold text-lg">Day Off</p>
+            <p className="text-sm text-ios-gray mt-1">No tasks today. Rest well!</p>
+          </div>
+        ) : tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
               <span className="text-3xl">🌿</span>
