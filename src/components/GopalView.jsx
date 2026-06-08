@@ -291,46 +291,41 @@ function TaskItem({ task, onPostpone }) {
 
 // ─── Postponed Task Item ─────────────────────────────────────────────────────
 function PostponedTaskItem({ task }) {
-  const [animating, setAnimating] = useState(false);
+  const [done, setDone] = useState(false);
 
   async function handleTap() {
-    if (animating) return;
-    setAnimating(true);
+    if (done) return;
+    setDone(true);
     await updateDoc(doc(db, "taskInstances", task.id), {
       status: "done",
       completedAt: serverTimestamp(),
       postponeAudioBase64: deleteField(),
     });
-    setTimeout(() => setAnimating(false), 300);
   }
 
   return (
     <button
       onClick={handleTap}
-      disabled={animating}
-      className="w-full bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 shadow-sm
-                 flex items-center gap-3 active:scale-[0.97] transition-transform disabled:opacity-50"
+      className="task-item tap-scale w-full flex items-center gap-4 px-4 py-4
+                 bg-amber-50 border border-amber-200 rounded-2xl shadow-sm active:scale-[0.97]"
     >
       <div
-        className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center
-                    bg-amber-200 border-2 border-amber-300"
+        className={`task-circle w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-colors
+                    ${done ? "bg-ios-green border-ios-green" : "bg-amber-100 border-amber-400"}`}
       >
-        <svg
-          className="w-3.5 h-3.5 text-amber-700"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2.5}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6" />
-        </svg>
+        {done ? (
+          <svg className="check-pop w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6" />
+          </svg>
+        )}
       </div>
-      <p className="text-base font-medium text-gray-600 leading-snug flex-1 text-left">
+      <p className="task-title text-base font-medium text-gray-600 leading-snug flex-1 text-left">
         {task.title}
       </p>
-      <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-      </svg>
     </button>
   );
 }
