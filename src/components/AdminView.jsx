@@ -945,6 +945,609 @@ function StatCard({ label, value, color }) {
   );
 }
 
+// ─── Staff Tab Helpers ────────────────────────────────────────────────────────
+const WORKERS = [
+  { id: "gopal",    name: "Gopal",    role: "Maid",          initials: "G" },
+  { id: "draupadi", name: "Draupadi", role: "Cook",          initials: "D" },
+  { id: "savitri",  name: "Savitri",  role: "Sweeper",       initials: "S" },
+  { id: "milkman",  name: "Milkman",  role: "Milk delivery", initials: "M" },
+];
+const AVATAR_STYLE = [
+  { bg: "bg-blue-100",   text: "text-blue-700"   },
+  { bg: "bg-teal-100",   text: "text-teal-700"   },
+  { bg: "bg-amber-100",  text: "text-amber-700"  },
+  { bg: "bg-purple-100", text: "text-purple-700" },
+];
+const CAL_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const CAL_DAY_LABELS  = ["M","T","W","T","F","S","S"];
+
+function calDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+function calFirstWeekday(year, month) {
+  const d = new Date(year, month, 1).getDay();
+  return d === 0 ? 6 : d - 1; // Mon=0…Sun=6
+}
+function toDateStr(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function currentMonthStr() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+}
+function labelMonthStr(ms) {
+  const [y, m] = ms.split("-");
+  return `${CAL_MONTH_NAMES[+m - 1]} ${y}`;
+}
+
+// ─── Add Payment Modal ────────────────────────────────────────────────────────
+function AddPaymentModal({ workerId, workerName, defaultMonth, onClose }) {
+  const [amount, setAmount] = useState("");
+  const [pDate, setPDate]   = useState(getTodayString());
+  const [note, setNote]     = useState("");
+  const [month, setMonth]   = useState(defaultMonth || currentMonthStr());
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState("");
+
+  const monthOptions = Array.from({ length: 4 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const ms = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return { value: ms, label: labelMonthStr(ms) };
+  });
+
+  async function handleSave() {
+    const amt = parseFloat(amount);
+    if (!amount || isNaN(amt) || amt <= 0) return setError("Enter a valid amount.");
+    setSaving(true); setError("");
+    try {
+      await addDoc(collection(db, "payments"), {
+        workerId, amount: amt, date: pDate,
+        note: note.trim(), month, createdAt: serverTimestamp(),
+      });
+      onClose();
+    } catch (e) {
+      setError(e.message || "Failed to save."); setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="modal-content w-full sm:max-w-lg bg-white sm:rounded-2xl rounded-t-2xl overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-900">Add payment — {workerName}</h2>
+          <button onClick={onClose} className="text-ios-gray hover:text-gray-700 p-1">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-ios-gray uppercase tracking-wider mb-1.5">Amount (₹)</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
+              placeholder="e.g. 2000" autoFocus
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900
+                         focus:outline-none focus:ring-2 focus:ring-ios-blue/30 focus:border-ios-blue" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ios-gray uppercase tracking-wider mb-1.5">Date</label>
+            <input type="date" value={pDate} onChange={e => setPDate(e.target.value)}
+              className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900
+                         focus:outline-none focus:ring-2 focus:ring-ios-blue/30 focus:border-ios-blue" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ios-gray uppercase tracking-wider mb-1.5">Applies to month</label>
+            <select value={month} onChange={e => setMonth(e.target.value)}
+              className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900
+                         focus:outline-none focus:ring-2 focus:ring-ios-blue/30 focus:border-ios-blue">
+              {monthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ios-gray uppercase tracking-wider mb-1.5">Note (optional)</label>
+            <input type="text" value={note} onChange={e => setNote(e.target.value)}
+              placeholder="e.g. advance, bonus…"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900
+                         focus:outline-none focus:ring-2 focus:ring-ios-blue/30 focus:border-ios-blue" />
+          </div>
+          {error && <p className="text-sm text-ios-red font-medium">{error}</p>}
+        </div>
+        <div className="px-5 py-4 border-t border-gray-100">
+          <button onClick={handleSave} disabled={saving}
+            className="w-full bg-ios-blue text-white font-semibold py-3.5 rounded-xl
+                       disabled:opacity-50 active:scale-[0.98] transition-transform">
+            {saving ? "Saving…" : "Save Payment"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Payments Segment ─────────────────────────────────────────────────────────
+function PaymentsSegment() {
+  const [selectedWorker, setSelectedWorker] = useState("gopal");
+  const [allPayments, setAllPayments]       = useState([]);
+  const [monthlySalary, setMonthlySalary]   = useState(0);
+  const [editingSalary, setEditingSalary]   = useState(false);
+  const [salaryInput, setSalaryInput]       = useState("");
+  const [showAdd, setShowAdd]               = useState(false);
+  const [viewMonth, setViewMonth]           = useState(currentMonthStr());
+
+  const monthOptions = Array.from({ length: 4 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const ms = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return { value: ms, label: labelMonthStr(ms) };
+  });
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "workerConfig", selectedWorker), snap => {
+      setMonthlySalary(snap.data()?.monthlySalary || 0);
+    });
+    return unsub;
+  }, [selectedWorker]);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "payments"),
+      where("workerId", "==", selectedWorker),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(q, snap => {
+      setAllPayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [selectedWorker]);
+
+  const payments  = allPayments.filter(p => p.month === viewMonth);
+  const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0);
+  const balance   = monthlySalary > 0 ? monthlySalary - totalPaid : null;
+  const paidPct   = monthlySalary > 0 ? Math.min(100, Math.round((totalPaid / monthlySalary) * 100)) : 0;
+
+  async function saveSalary() {
+    const val = parseFloat(salaryInput);
+    if (isNaN(val) || val < 0) return;
+    await setDoc(doc(db, "workerConfig", selectedWorker), { monthlySalary: val }, { merge: true });
+    setEditingSalary(false);
+  }
+
+  async function handleDeletePayment(id) {
+    if (!confirm("Delete this payment?")) return;
+    await deleteDoc(doc(db, "payments", id));
+  }
+
+  const worker = WORKERS.find(w => w.id === selectedWorker);
+
+  return (
+    <div>
+      {/* Worker tabs */}
+      <div className="flex border-b border-gray-200 mb-4 -mx-4 px-4">
+        {WORKERS.map(w => (
+          <button key={w.id} onClick={() => setSelectedWorker(w.id)}
+            className={`px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors
+                        ${selectedWorker === w.id
+                          ? "border-ios-blue text-ios-blue"
+                          : "border-transparent text-ios-gray hover:text-gray-600"}`}>
+            {w.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Month filter */}
+      <div className="flex gap-1.5 mb-4 flex-wrap">
+        {monthOptions.map(o => (
+          <button key={o.value} onClick={() => setViewMonth(o.value)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors
+                        ${viewMonth === o.value
+                          ? "bg-ios-blue text-white"
+                          : "bg-white text-gray-600 border border-gray-200"}`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Salary card */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-sm font-semibold text-gray-900">{labelMonthStr(viewMonth)} salary</p>
+          {balance !== null && (
+            <span className={`text-sm font-semibold ${balance > 0 ? "text-ios-blue" : "text-ios-green"}`}>
+              {balance > 0 ? `₹${balance.toLocaleString()} balance` : "Fully paid ✓"}
+            </span>
+          )}
+        </div>
+        {monthlySalary > 0 && !editingSalary && (
+          <>
+            <div className="h-2 bg-ios-lightgray rounded-full overflow-hidden my-2">
+              <div className="h-full bg-ios-green rounded-full transition-all duration-500"
+                   style={{ width: `${paidPct}%` }} />
+            </div>
+            <div className="flex justify-between text-xs text-ios-gray">
+              <span>₹{totalPaid.toLocaleString()} paid</span>
+              <button onClick={() => { setEditingSalary(true); setSalaryInput(String(monthlySalary)); }}
+                className="text-ios-blue font-medium">
+                ₹{monthlySalary.toLocaleString()} total · edit
+              </button>
+            </div>
+          </>
+        )}
+        {monthlySalary === 0 && !editingSalary && (
+          <p className="text-xs text-ios-gray mt-1">
+            ₹{totalPaid.toLocaleString()} paid ·{" "}
+            <button onClick={() => { setEditingSalary(true); setSalaryInput(""); }}
+              className="text-ios-blue font-semibold">Set monthly salary →</button>
+          </p>
+        )}
+        {editingSalary && (
+          <div className="flex gap-2 mt-2">
+            <input type="number" value={salaryInput} onChange={e => setSalaryInput(e.target.value)}
+              placeholder="Monthly ₹" autoFocus
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900
+                         focus:outline-none focus:ring-2 focus:ring-ios-blue/30" />
+            <button onClick={saveSalary}
+              className="bg-ios-blue text-white px-4 py-2 rounded-xl text-sm font-semibold">Save</button>
+            <button onClick={() => setEditingSalary(false)}
+              className="text-ios-gray px-3 py-2 text-sm">✕</button>
+          </div>
+        )}
+      </div>
+
+      {/* Payment list */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-ios-gray uppercase tracking-wider">Payments</p>
+        <button onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1.5 bg-ios-blue text-white px-3 py-1.5 rounded-xl
+                     text-sm font-semibold active:scale-[0.97] transition-transform shadow-sm">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+          Add
+        </button>
+      </div>
+
+      {payments.length === 0 ? (
+        <div className="text-center py-8 bg-white rounded-2xl shadow-sm">
+          <p className="text-gray-400 text-sm">No payments for {labelMonthStr(viewMonth)}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {payments.map(p => (
+            <div key={p.id} className="bg-white rounded-2xl px-4 py-3.5 shadow-sm flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-ios-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900">₹{(p.amount || 0).toLocaleString()}</p>
+                <p className="text-xs text-ios-gray">
+                  {p.date}{p.note ? ` · ${p.note}` : ""}
+                </p>
+              </div>
+              <button onClick={() => handleDeletePayment(p.id)}
+                className="p-1.5 text-ios-gray hover:text-ios-red transition-colors rounded-lg hover:bg-red-50">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <AddPaymentModal workerId={selectedWorker} workerName={worker?.name}
+          defaultMonth={viewMonth} onClose={() => setShowAdd(false)} />
+      )}
+    </div>
+  );
+}
+
+// ─── Attendance Segment ───────────────────────────────────────────────────────
+function AttendanceSegment() {
+  const todayStr = getTodayString();
+  const nowDate  = new Date();
+
+  const [todayAbsences, setTodayAbsences] = useState({});
+  const [selectedWorker, setSelectedWorker] = useState("gopal");
+  const [calYear,  setCalYear]  = useState(nowDate.getFullYear());
+  const [calMonth, setCalMonth] = useState(nowDate.getMonth()); // 0-based
+  const [absentSet, setAbsentSet] = useState(new Set());
+  const [working, setWorking] = useState({});
+
+  // Real-time listeners for today's absences (all workers)
+  useEffect(() => {
+    const unsubs = [];
+    // Gopal: driven by dayStatus (same doc Today tab uses)
+    unsubs.push(onSnapshot(doc(db, "dayStatus", todayStr), snap => {
+      setTodayAbsences(prev => ({ ...prev, gopal: snap.exists() && snap.data()?.absent === true }));
+    }));
+    // Others: attendance collection
+    ["draupadi", "savitri", "milkman"].forEach(id => {
+      unsubs.push(onSnapshot(doc(db, "attendance", `${id}_${todayStr}`), snap => {
+        setTodayAbsences(prev => ({ ...prev, [id]: snap.exists() && snap.data()?.absent === true }));
+      }));
+    });
+    return () => unsubs.forEach(u => u());
+  }, [todayStr]);
+
+  // Fetch calendar absences for selected worker + displayed month
+  useEffect(() => {
+    async function fetchAbsences() {
+      const first = toDateStr(calYear, calMonth, 1);
+      const last  = toDateStr(calYear, calMonth, calDaysInMonth(calYear, calMonth));
+      const absent = new Set();
+
+      if (selectedWorker === "gopal") {
+        const snap = await getDocs(
+          query(collection(db, "dayStatus"), where("date", ">=", first), where("date", "<=", last))
+        );
+        snap.forEach(d => { if (d.data().absent === true) absent.add(d.data().date); });
+      } else {
+        // Query by date range only to avoid needing a composite index
+        const snap = await getDocs(
+          query(collection(db, "attendance"), where("date", ">=", first), where("date", "<=", last))
+        );
+        snap.forEach(d => {
+          const dat = d.data();
+          if (dat.workerId === selectedWorker && dat.absent === true) absent.add(dat.date);
+        });
+      }
+      setAbsentSet(absent);
+    }
+    fetchAbsences();
+  }, [selectedWorker, calYear, calMonth]);
+
+  function isAbsentOnDate(ds) {
+    if (ds === todayStr) return todayAbsences[selectedWorker] || false;
+    return absentSet.has(ds);
+  }
+
+  async function toggleTodayAbsent(workerId) {
+    const isAbsent = todayAbsences[workerId] || false;
+    const key = `${workerId}_today`;
+    setWorking(prev => ({ ...prev, [key]: true }));
+    try {
+      if (workerId === "gopal") {
+        if (!isAbsent) {
+          if (!confirm("Mark Gopal as absent today? All today's tasks will be cleared from his app.")) return;
+          await setDoc(doc(db, "dayStatus", todayStr), { absent: true, markedAt: serverTimestamp(), date: todayStr });
+          const snap = await getDocs(query(collection(db, "taskInstances"), where("date", "==", todayStr)));
+          await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+        } else {
+          await setDoc(doc(db, "dayStatus", todayStr), { absent: false, date: todayStr });
+          await generateDayInstances();
+        }
+      } else {
+        if (!isAbsent) {
+          await setDoc(doc(db, "attendance", `${workerId}_${todayStr}`), {
+            workerId, date: todayStr, absent: true, markedAt: serverTimestamp(),
+          });
+        } else {
+          await deleteDoc(doc(db, "attendance", `${workerId}_${todayStr}`));
+        }
+      }
+      // Sync calendar set if showing current month
+      if (workerId === selectedWorker && calYear === nowDate.getFullYear() && calMonth === nowDate.getMonth()) {
+        setAbsentSet(prev => {
+          const next = new Set(prev);
+          !isAbsent ? next.add(todayStr) : next.delete(todayStr);
+          return next;
+        });
+      }
+    } finally {
+      setWorking(prev => ({ ...prev, [key]: false }));
+    }
+  }
+
+  async function toggleCalendarDay(ds) {
+    if (ds > todayStr) return;
+    if (ds === todayStr) { toggleTodayAbsent(selectedWorker); return; }
+
+    const isAbsent = absentSet.has(ds);
+    // Optimistic update
+    setAbsentSet(prev => {
+      const next = new Set(prev);
+      isAbsent ? next.delete(ds) : next.add(ds);
+      return next;
+    });
+    try {
+      if (selectedWorker === "gopal") {
+        await setDoc(doc(db, "dayStatus", ds), { absent: !isAbsent, date: ds }, { merge: true });
+      } else {
+        if (!isAbsent) {
+          await setDoc(doc(db, "attendance", `${selectedWorker}_${ds}`), {
+            workerId: selectedWorker, date: ds, absent: true, markedAt: serverTimestamp(),
+          });
+        } else {
+          await deleteDoc(doc(db, "attendance", `${selectedWorker}_${ds}`));
+        }
+      }
+    } catch {
+      // Revert on error
+      setAbsentSet(prev => {
+        const next = new Set(prev);
+        isAbsent ? next.add(ds) : next.delete(ds);
+        return next;
+      });
+    }
+  }
+
+  const daysCount      = calDaysInMonth(calYear, calMonth);
+  const startOffset    = calFirstWeekday(calYear, calMonth);
+  const isCurrentMonth = calYear === nowDate.getFullYear() && calMonth === nowDate.getMonth();
+  const daysElapsed    = isCurrentMonth ? nowDate.getDate() : daysCount;
+  const daysLeft       = daysCount - daysElapsed;
+
+  let presentCount = 0, absentCount = 0;
+  for (let d = 1; d <= daysElapsed; d++) {
+    if (isAbsentOnDate(toDateStr(calYear, calMonth, d))) absentCount++;
+    else presentCount++;
+  }
+
+  function prevMonth() {
+    if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); }
+    else setCalMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (isCurrentMonth) return;
+    if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); }
+    else setCalMonth(m => m + 1);
+  }
+
+  return (
+    <div>
+      {/* Today quick-mark row */}
+      <p className="text-xs font-semibold text-ios-gray uppercase tracking-wider mb-2">
+        Today — {formatDisplayDate(todayStr)}
+      </p>
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-5">
+        {WORKERS.map((w, i) => {
+          const isAbsent  = todayAbsences[w.id] || false;
+          const av        = AVATAR_STYLE[i];
+          const isWorking = working[`${w.id}_today`];
+          return (
+            <div key={w.id} className="flex items-center px-4 py-3 border-b border-gray-50 last:border-0 gap-3">
+              <div className={`w-9 h-9 rounded-full ${av.bg} ${av.text} flex items-center justify-center text-sm font-semibold flex-shrink-0`}>
+                {w.initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900">{w.name}</p>
+                <p className="text-xs text-ios-gray">{w.role}</p>
+              </div>
+              {isAbsent ? (
+                <button onClick={() => toggleTodayAbsent(w.id)} disabled={isWorking}
+                  className="text-xs font-semibold text-white bg-ios-red px-3 py-1.5 rounded-xl
+                             hover:opacity-90 transition-opacity disabled:opacity-50">
+                  {isWorking ? "…" : "Absent · Undo"}
+                </button>
+              ) : (
+                <button onClick={() => toggleTodayAbsent(w.id)} disabled={isWorking}
+                  className="text-xs font-semibold text-ios-red border border-red-200 px-3 py-1.5 rounded-xl
+                             hover:bg-red-50 transition-colors disabled:opacity-50">
+                  {isWorking ? "…" : "Mark absent"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Calendar + worker selector */}
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <p className="text-xs font-semibold text-ios-gray uppercase tracking-wider">Calendar</p>
+        <div className="flex gap-1 flex-wrap">
+          {WORKERS.map((w, i) => {
+            const av = AVATAR_STYLE[i];
+            return (
+              <button key={w.id} onClick={() => setSelectedWorker(w.id)}
+                className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors
+                            ${selectedWorker === w.id ? `${av.bg} ${av.text}` : "bg-gray-100 text-ios-gray"}`}>
+                {w.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm p-4">
+        {/* Month navigation */}
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-gray-900">{CAL_MONTH_NAMES[calMonth]} {calYear}</p>
+          <div className="flex gap-1">
+            <button onClick={prevMonth}
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-ios-lightgray text-gray-600 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button onClick={nextMonth} disabled={isCurrentMonth}
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-ios-lightgray text-gray-600 transition-colors disabled:opacity-30">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Weekday header */}
+        <div className="grid grid-cols-7 mb-1">
+          {CAL_DAY_LABELS.map((d, i) => (
+            <div key={i} className="text-center text-xs font-semibold text-ios-gray py-1">{d}</div>
+          ))}
+        </div>
+
+        {/* Days grid */}
+        <div className="grid grid-cols-7 gap-0.5">
+          {Array.from({ length: startOffset }).map((_, i) => <div key={`gap-${i}`} />)}
+          {Array.from({ length: daysCount }, (_, i) => {
+            const day      = i + 1;
+            const ds       = toDateStr(calYear, calMonth, day);
+            const absent   = isAbsentOnDate(ds);
+            const isToday  = ds === todayStr;
+            const isFuture = ds > todayStr;
+            return (
+              <button key={day} onClick={() => !isFuture && toggleCalendarDay(ds)} disabled={isFuture}
+                className={`aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-colors
+                            ${isFuture
+                              ? "text-gray-300 cursor-default"
+                              : isToday
+                                ? absent ? "bg-ios-red text-white" : "bg-ios-blue text-white"
+                                : absent
+                                  ? "bg-red-100 text-ios-red font-semibold"
+                                  : "text-gray-700 hover:bg-ios-lightgray cursor-pointer"
+                            }`}>
+                {day}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Stats row */}
+        <div className="flex mt-4 pt-3 border-t border-gray-100">
+          <div className="flex-1 text-center">
+            <p className="text-xl font-bold text-ios-green">{presentCount}</p>
+            <p className="text-xs text-ios-gray mt-0.5">Present</p>
+          </div>
+          <div className="w-px bg-gray-100" />
+          <div className="flex-1 text-center">
+            <p className="text-xl font-bold text-ios-red">{absentCount}</p>
+            <p className="text-xs text-ios-gray mt-0.5">Absent</p>
+          </div>
+          <div className="w-px bg-gray-100" />
+          <div className="flex-1 text-center">
+            <p className="text-xl font-bold text-gray-400">{daysLeft}</p>
+            <p className="text-xs text-ios-gray mt-0.5">Remaining</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Staff Tab ────────────────────────────────────────────────────────────────
+function StaffTab() {
+  const [segment, setSegment] = useState("attendance");
+  return (
+    <div>
+      <div className="flex bg-ios-lightgray rounded-xl p-1 mb-5 gap-1">
+        {["attendance", "payments"].map(s => (
+          <button key={s} onClick={() => setSegment(s)}
+            className={`flex-1 py-2 text-sm font-semibold rounded-lg capitalize transition-colors
+                        ${segment === s ? "bg-white text-gray-900 shadow-sm" : "text-ios-gray"}`}>
+            {s}
+          </button>
+        ))}
+      </div>
+      {segment === "attendance" ? <AttendanceSegment /> : <PaymentsSegment />}
+    </div>
+  );
+}
+
 // ─── Main Admin View ──────────────────────────────────────────────────────────
 export default function AdminView() {
   const [tab, setTab] = useState("today");
@@ -952,8 +1555,9 @@ export default function AdminView() {
   const router = useRouter();
 
   const tabs = [
-    { id: "today", label: "Today", icon: "📅" },
-    { id: "tasks", label: "Tasks", icon: "☑" },
+    { id: "today",     label: "Today",     icon: "📅" },
+    { id: "tasks",     label: "Tasks",     icon: "☑"  },
+    { id: "staff",     label: "Staff",     icon: "👥" },
     { id: "analytics", label: "Analytics", icon: "📊" },
   ];
 
@@ -1002,8 +1606,9 @@ export default function AdminView() {
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto px-4 py-5 safe-bottom max-w-2xl mx-auto w-full">
-        {tab === "tasks" && <TasksTab />}
-        {tab === "today" && <TodayTab />}
+        {tab === "today"     && <TodayTab />}
+        {tab === "tasks"     && <TasksTab />}
+        {tab === "staff"     && <StaffTab />}
         {tab === "analytics" && <AnalyticsTab />}
       </div>
     </div>
