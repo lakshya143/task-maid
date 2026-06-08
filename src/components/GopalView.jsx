@@ -393,11 +393,11 @@ export default function GopalView() {
 
   // Record completion time when all active tasks are done
   useEffect(() => {
-    if (activeTasks.length === 0) return;
-    const nowAllDone = activeTasks.every((t) => t.status === "done");
+    const active = tasks.filter((t) => t.status !== "postponed");
+    if (active.length === 0) return;
+    const nowAllDone = active.every((t) => t.status === "done");
 
     if (nowAllDone && !wasAllDoneRef.current) {
-      // Find the latest scheduled time across ALL today's tasks (intended end)
       const latestTime = tasks.reduce((latest, t) => {
         return compareTime(t.time || "00:00", latest) > 0 ? (t.time || "00:00") : latest;
       }, "00:00");
@@ -410,7 +410,7 @@ export default function GopalView() {
     }
 
     wasAllDoneRef.current = nowAllDone;
-  }, [activeTasks, tasks, todayStr]);
+  }, [tasks, todayStr]);
 
   // Real-time listener for today's task instances
   useEffect(() => {
